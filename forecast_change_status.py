@@ -11,9 +11,9 @@ import win32com.client
 def read_data():
     df_avis = pd.read_excel(r"J:\Decision Technology\PersonalFolders\Saurav\All_Significant_Changes.xlsx",sheetname = "Avis SummaryDiff_Listing")
     df_budget = pd.read_excel(r"J:\Decision Technology\PersonalFolders\Saurav\All_Significant_Changes.xlsx",sheetname = "Budget SummaryDiff_Listing")
-    
-    print df_avis
-    return [df_avis,df_budget]
+    df_payless = pd.read_excel(r"J:\Decision Technology\PersonalFolders\Saurav\All_Significant_Changes.xlsx",sheetname = "Payless SummaryDiff_Listing")
+
+    return [df_avis,df_budget,df_payless]
 
 def generate_status(data,sheetname):
     flag_row =[]
@@ -50,9 +50,10 @@ def send_email():
     mail.Send()
     
 if __name__=="__main__":
-    [df_avis,df_budget] = read_data()
+    [df_avis,df_budget,df_payless] = read_data()
     writer = pd.ExcelWriter("forecast_change_status.xlsx", engine = 'xlsxwriter')
     generate_status(df_avis,"Avis")
     generate_status(df_budget,"Budget")
+    generate_status(df_payless,"Payless")
     writer.save() 
     send_email()
