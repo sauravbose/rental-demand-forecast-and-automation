@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu May 25 14:06:52 2017
+Created on Wed Jun 07 09:28:26 2017
 
 @author: bosesaur
 """
@@ -33,22 +33,29 @@ def start_summary(df):
         days_prior.append(i)
     days_prior = np.unique(days_prior) 
     
-    d_final = df2
+    d_detailed = pd.DataFrame(df2)
+    out_detailed = d_detailed.groupby(['MRKT_GRP','BRAND','RUN_DP']).sum()
+    del out_detailed['PROS_PERC_ERR']
+        
+    d_final = pd.DataFrame(df2)
     del d_final['RUN_DP']
     out_final = d_final.groupby(['MRKT_GRP','BRAND']).sum()    
-    del out_final['PROS_PERC_ERR']   
+    del out_final['PROS_PERC_ERR']  
+   
     
-    return [out_final,mrkt_grp,brand,days_prior]
     
     
-def generate_summary(df,out_final,column_header,mrkt_grp,brand,days_prior):
+    return [out_detailed,out_final,mrkt_grp,brand,days_prior]
+    
+    
+def generate_summary(df,out_detailed,out_final,in_column_header,out_column_header,mrkt_grp,brand,days_prior):
             
-    df2 = df[['MRKT_GRP','RUN_DP','BRAND','PROS_PERC_ERR']]
+    df2 = df[['MRKT_GRP','RUN_DP','BRAND',in_column_header]]
     
     d1 = df2.groupby(['MRKT_GRP','BRAND','RUN_DP'])
     out_data = d1.sum()
     
-    d_err = out_data['PROS_PERC_ERR']
+    d_err = out_data[in_column_header]
     pros_perc_error = []
     for i in range(len(d_err)):
         pros_perc_error.append(d_err[i])
@@ -62,7 +69,8 @@ def generate_summary(df,out_final,column_header,mrkt_grp,brand,days_prior):
         else: 
             comment.append('Bad')
     
-    out_data['vs Actual(Overall)'] = comment
+    #out_data[out_column_header] = comment
+    out_detailed[out_column_header] = comment
     
     flag = []
     for i in range(len(comment)):
@@ -71,11 +79,14 @@ def generate_summary(df,out_final,column_header,mrkt_grp,brand,days_prior):
         else:
             flag.append(0)
     
-    out_data['Flag'] = flag    
+    #out_data['Flag_%s'%out_column_header] = flag    
+    out_detailed['Flag_%s'%out_column_header] = flag    
     
     #Write the detailed output dataframe to file        
     #write_data('summary_detailed.xlsx',out_data)
-      
+    write_data('summary_detailed.xlsx',out_detailed)
+     
+    
     final_flag = {}
     final_flag = dict.fromkeys(mrkt_grp)
     for i in final_flag:
@@ -105,14 +116,14 @@ def generate_summary(df,out_final,column_header,mrkt_grp,brand,days_prior):
         else: 
             final_comment.append('Bad')
             
-    out_final[column_header] = final_comment 
+    out_final[out_column_header] = final_comment 
                   
  
-def generate_dow_summary(df_dow, out_final, mrkt_grp,brand):
+def generate_dow_summary(df_dow,in_col_head,out_final, mrkt_grp,brand):
     dow_dict = {1:'Sun',2:'Mon',3:'Tue',4:'Wed',5:'Thu',6:'Fri',7:'Sat'}
     dow = dow_dict.keys()             
             
-    df2_dow = df_dow[['MRKT_GRP','RUN_DP','BRAND','DOW','PROS_PERC_ERR_DATA']]
+    df2_dow = df_dow[['MRKT_GRP','RUN_DP','BRAND','DOW',in_col_head]]
     df2_dow = df2_dow.dropna()
     d2 = df2_dow.groupby(['MRKT_GRP','BRAND','DOW'])
     d3 = d2.mean()
@@ -130,7 +141,7 @@ def generate_dow_summary(df_dow, out_final, mrkt_grp,brand):
     for m in mrkt_grp:
         for b in brand:
             for i in range(len(dow)):
-                dow_flag[m][b].append((i+1,d3['PROS_PERC_ERR_DATA'][dow_com_index]))
+                dow_flag[m][b].append((i+1,d3[in_col_head][dow_com_index]))
                 dow_com_index+=1    
     
     
@@ -149,13 +160,13 @@ def generate_dow_summary(df_dow, out_final, mrkt_grp,brand):
         for b in brand:
             out_dow_flag.append(dow_flag[m][b])
     
-    out_final['Underforecast'] = out_dow_flag
+    out_final['Underforecast_%s'%in_col_head] = out_dow_flag
                     
-def generate_week_summary(df):
+def generate_week_summary(df,in_col,out_col):
     df2 = df.loc[df['CO_DATE']>=pd.to_datetime('2017/05/08')]
     df3 = df2.loc[df2['CO_DATE']<=pd.to_datetime('2017/05/15')]
     
-    generate_summary(df3,out_final,'vs Actual (Past Week)',mrkt_grp,brand,days_prior)
+    generate_summary(df3,out_detailed,out_final,in_col,out_col,mrkt_grp,brand,days_prior)
 
      
 def write_data(filename,content):
@@ -165,12 +176,14 @@ def write_data(filename,content):
 
 if __name__=='__main__':
     [df,df_dow]=read_data()
-    [out_final,mrkt_grp,brand,days_prior] = start_summary(df)
+    [out_detailed,out_final,mrkt_grp,brand,days_prior] = start_summary(df)
     
-    generate_summary(df,out_final,'vs Actual (Overall)',mrkt_grp,brand,days_prior)
-    generate_dow_summary(df_dow, out_final, mrkt_grp,brand)
-    generate_week_summary(df)
+    generate_summary(df,out_detailed,out_final,'PROS_PERC_ERR','vs Actual (Overall)',mrkt_grp,brand,days_prior)
+    generate_dow_summary(df_dow,'PROS_PERC_ERR_DATA', out_final, mrkt_grp,brand)
+    generate_week_summary(df,'PROS_PERC_ERR','vs Actual (Past Week)')
+    
+    generate_summary(df,out_detailed,out_final,'ERR_DIFF_PROS_YLD','vs Yield (Overall)',mrkt_grp,brand,days_prior)
+    generate_dow_summary(df_dow,'ERR_DIFF_PROS_YLD', out_final, mrkt_grp,brand)
+    generate_week_summary(df,'ERR_DIFF_PROS_YLD','vs Yield (Past Week)')
     #Write the output dataframe to file          
     write_data('summary_final.xlsx',out_final)  
-    
-
