@@ -87,6 +87,8 @@ def send_email(data):
         
 
 if __name__=="__main__":
+    
     [yield_prod,pros_on,yield_test]= get_data()
     data = write_data(yield_prod,pros_on,yield_test)
-    send_email(data)
+    #send_email(data)
+
