@@ -13,7 +13,7 @@ import win32com.client
 
 def get_data():
     
-    conn = pyodbc.connect(DSN="Yieldprod",uid="fanlinli",pwd="Nino0617" )
+    conn = pyodbc.connect(DSN="Database",uid="",pwd="" )
     
     cursor = conn.cursor()
     
@@ -32,7 +32,7 @@ def get_data():
     print pros_on
     conn.close()
     
-    conn = pyodbc.connect(DSN="Yieldtest",uid="fanlinli",pwd="Nino0617" )
+    conn = pyodbc.connect(DSN="database",uid="",pwd="" )
     
     cursor = conn.cursor()
     
@@ -77,8 +77,8 @@ def write_data(yield_prod,pros_on,yield_test):
 def send_email(data):
     o = win32com.client.Dispatch("Outlook.Application")
     mail = o.CreateItem(0)
-    mail.To = "Linlin.Fan@avisbudget.com"
-    mail.CC = "Saurav.Bose@avisbudget.com"
+    mail.To = "Linlin.Fan@ab.com"
+    mail.CC = "Saurav.Bose@ab.com"
     mail.Subject = "Today's Status"
     mail.Body = "Hi,\nPFA today's status as an Excel file.\nBest,\nSaurav Bose"
     attachment1 = r"H:\statusflags.xlsx"
@@ -90,5 +90,5 @@ if __name__=="__main__":
     
     [yield_prod,pros_on,yield_test]= get_data()
     data = write_data(yield_prod,pros_on,yield_test)
-    #send_email(data)
+    send_email(data)
 
