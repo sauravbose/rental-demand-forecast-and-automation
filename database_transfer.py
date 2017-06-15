@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 #Establish connection with Oracle database
-conn_oracle = pyodbc.connect(DSN = "Yieldprod", uid = "fanlinli", pwd = "Nino0617")
+conn_oracle = pyodbc.connect(DSN = "Database", uid = "", pwd = "")
 cursor = conn_oracle.cursor()
 
 #Retrieve data from Oracle using SQL
