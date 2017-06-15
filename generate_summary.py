@@ -185,5 +185,5 @@ if __name__=='__main__':
     generate_summary(df,out_detailed,out_final,'ERR_DIFF_PROS_YLD','vs Yield (Overall)',mrkt_grp,brand,days_prior)
     generate_dow_summary(df_dow,'ERR_DIFF_PROS_YLD', out_final, mrkt_grp,brand)
     generate_week_summary(df,'ERR_DIFF_PROS_YLD','vs Yield (Past Week)')
-    #Write the output dataframe to files          
+    #Write the output dataframe to file         
     write_data('summary_final.xlsx',out_final)  
