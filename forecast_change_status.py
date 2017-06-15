@@ -9,11 +9,11 @@ import pandas as pd
 import win32com.client
 
 def read_data():
-    df_avis = pd.read_excel(r"J:\Decision Technology\PersonalFolders\Saurav\All_Significant_Changes.xlsx",sheetname = "Avis SummaryDiff_Listing")
-    df_budget = pd.read_excel(r"J:\Decision Technology\PersonalFolders\Saurav\All_Significant_Changes.xlsx",sheetname = "Budget SummaryDiff_Listing")
-    df_payless = pd.read_excel(r"J:\Decision Technology\PersonalFolders\Saurav\All_Significant_Changes.xlsx",sheetname = "Payless SummaryDiff_Listing")
+    df_a = pd.read_excel(r"J:\Decision Technology\PersonalFolders\Saurav\All_Significant_Changes.xlsx",sheetname = "A SummaryDiff_Listing")
+    df_b = pd.read_excel(r"J:\Decision Technology\PersonalFolders\Saurav\All_Significant_Changes.xlsx",sheetname = "B SummaryDiff_Listing")
+    df_p = pd.read_excel(r"J:\Decision Technology\PersonalFolders\Saurav\All_Significant_Changes.xlsx",sheetname = "P SummaryDiff_Listing")
 
-    return [df_avis,df_budget,df_payless]
+    return [df_a,df_b,df_p]
 
 def generate_status(data,sheetname):
     flag_row =[]
@@ -41,8 +41,8 @@ def write_data(content,sheetname,writer):
 def send_email():
     o = win32com.client.Dispatch("Outlook.Application")
     mail = o.CreateItem(0)
-    mail.To = "Linlin.Fan@avisbudget.com"
-    mail.CC = "Saurav.Bose@avisbudget.com"
+    mail.To = "Linlin.Fan@ab.com"
+    mail.CC = "Saurav.Bose@ab.com"
     mail.Subject = "Percent Change in daily forecast"
     mail.Body = "Hi,\nPFA any flags with regard to percent change in daily forecast.\nBest,\nSaurav Bose"
     attachment1 = r"H:\forecast_change_status.xlsx"
@@ -50,10 +50,10 @@ def send_email():
     mail.Send()
     
 if __name__=="__main__":
-    [df_avis,df_budget,df_payless] = read_data()
+    [df_a,df_b,df_p] = read_data()
     writer = pd.ExcelWriter("forecast_change_status.xlsx", engine = 'xlsxwriter')
-    generate_status(df_avis,"Avis")
-    generate_status(df_budget,"Budget")
-    generate_status(df_payless,"Payless")
+    generate_status(df_a,"A")
+    generate_status(df_b,"B")
+    generate_status(df_p,"P")
     writer.save() 
     send_email()
