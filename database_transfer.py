@@ -12,7 +12,7 @@ import pandas as pd
 import sqlite3
 
 #Establish connection with Oracle database
-conn_oracle = pyodbc.connect(DSN = "Yieldprod", uid = "fanlinli", pwd = "Nino0617")
+conn_oracle = pyodbc.connect(DSN = "", uid = "", pwd = "")
 cursor = conn_oracle.cursor()
 
 #Retrieve data from Oracle using SQL
@@ -36,9 +36,9 @@ res = pd.DataFrame(res,columns=column_names)
    res = pd.read_sql_query(sql,conn_oracle)''' 
 
 #write the dataframe to MS Excel
-#writer = pd.ExcelWriter("H:\oracle_data.xlsx", engine = "xlsxwriter")
-#res.to_excel(writer, sheet_name = "Oracle", index = False)
-#writer.save()
+writer = pd.ExcelWriter("H:\oracle_data.xlsx", engine = "xlsxwriter")
+res.to_excel(writer, sheet_name = "Oracle", index = False)
+writer.save()
 
 #write the dataframe to sqlite database
 conn_sqlit = sqlite3.connect(r"H:\testdata.db")
