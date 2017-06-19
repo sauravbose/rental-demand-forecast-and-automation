@@ -9,11 +9,12 @@ import pyodbc
 import sqlite3
 import pandas as pd
 import numpy as np
+import calendar
 
 
 def start_connection(databasepath, dsn, oracle, sqlit):
     if oracle:
-        conn_orc = pyodbc.connect(DSN = dsn , uid = "", pwd = "")
+        conn_orc = pyodbc.connect(DSN = dsn , uid = "fanlinli", pwd = "Nino0617")
         cursor_orc = conn_orc.cursor()
         return [conn_orc,cursor_orc]
     
@@ -68,6 +69,39 @@ def compute_forecastdiff(conn_sqlit):
     write_data("forecastdiff.xlsx",fore_diff)
 
 
+def daterange(conn_sqlit):
+    start = pd.datetime(2007,1,1)
+    end = pd.datetime(2017,12,31)
+    rng = pd.date_range(start,end)
+    
+    dates = pd.DataFrame()
+    dates["date"] = rng
+   # dates["date"]= dates["date"].apply(lambda x: x.date())    
+    
+    dates["month"] = pd.DatetimeIndex(dates["date"]).month
+    dates["month"] = dates["month"].apply(lambda x: calendar.month_abbr[x])
+    
+    dates["year"] = pd.DatetimeIndex(dates["date"]).year
+    
+    writetosqlite(dates,"Dates",conn_sqlit)
+        
+
+def summarize_forecastdiff(conn_sqlit):
+    SQL_finalforecastchange = "SELECT Summary_forecastdiff.EntityName,\
+    Summary_forecastdiff.PoolDescription, Dates.month, Dates.year,\
+    Sum(Summary_forecastdiff.Priordays_forecast) AS Demand_Yesterday,\
+    Sum(Summary_forecastdiff.Todays_forecast) AS Demand_Today,\
+    Sum(Summary_forecastdiff.Forecastdiff) AS TotalChange,\
+    Sum(Summary_forecastdiff.Forecastdiff)/Sum(Summary_forecastdiff.Priordays_forecast)\
+    AS PercentChange FROM Summary_forecastdiff\
+    INNER JOIN Dates ON Summary_forecastdiff.CheckOutDate = Dates.date\
+    GROUP BY Summary_forecastdiff.Entityname, Summary_forecastdiff.Pooldescription,\
+    Dates.month, Dates.year"
+    
+    sum_forecastdiff = pd.read_sql_query(SQL_finalforecastchange,conn_sqlit)
+    writetosqlite(sum_forecastdiff,"Final_forecast_change",conn_sqlit)
+    write_data("final_forecast_change.xlsx",sum_forecastdiff)
+
 def close_connection(conn):
     conn.close()
 
@@ -103,13 +137,11 @@ if __name__=="__main__":
     #Compute forecast diff
     compute_forecastdiff(conn_sqlit)
     
-    #Compute forcast at appropriate level
-    summary
+    #Create date range
+    daterange(conn_sqlit)
     
-       
-    sql = "select * from Priordays_forecast"
-    read = pd.read_sql_query(sql,conn_sqlit)
-    #print read
+    #Compute forcast at appropriate level
+    summarize_forecastdiff(conn_sqlit)
     
     close_connection(conn_sqlit)
     
