@@ -11,7 +11,7 @@ import time
 import datetime
 
 start = time.time()
-conn = pyodbc.connect(DSN="ProsUAT",uid="fanlinli",pwd="jun2017avis")
+conn = pyodbc.connect(DSN="",uid="",pwd="")
 
 sql = "select LOC.COUNTRY, LOC.REGION, LOC.POOL, LOC.MARKET_GROUP,FCS.BRAND, FCS.DFP_SUPER_SEGMENT, \
 FCS.FCST_DATE, LOC.NON_REV_INDICATOR,LOC.OPEN_LOCATION_IND, \
