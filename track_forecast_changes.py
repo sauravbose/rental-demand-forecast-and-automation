@@ -14,7 +14,7 @@ import calendar
 
 def start_connection(databasepath, dsn, oracle, sqlit):
     if oracle:
-        conn_orc = pyodbc.connect(DSN = dsn , uid = "", pwd = "")
+        conn_orc = pyodbc.connect(DSN = dsn , uid = "fanlinli", pwd = "Nino0617")
         cursor_orc = conn_orc.cursor()
         return [conn_orc,cursor_orc]
     
@@ -24,9 +24,12 @@ def start_connection(databasepath, dsn, oracle, sqlit):
         return [conn_sqlit, cursor_sqlit]
     
 
-def update_priorday_fore(conn):
+def update_priorday_fore(conn,forecast_today):
     priorday = pd.read_sql_query("select * from Todays_forecast",conn)
-    writetosqlite(priorday,"Priordays_forecast",conn)
+    if(priorday.equals(forecast_today) == False):
+        print 'executing'
+        writetosqlite(priorday,"Priordays_forecast",conn)
+       
 
 def capture_todays_forecast(conn):
     
@@ -44,8 +47,12 @@ def capture_todays_forecast(conn):
     
 
     data = pd.read_sql_query(SQL_currentdayforecastcapture,conn)
+    data["CheckOutDate"]= data["CheckOutDate"].apply(lambda x: x.date())  
+    for i in range(len(data["CheckOutDate"])):
+        data.loc[i,"CheckOutDate"] = unicode(data.loc[i,"CheckOutDate"])
     
     return data
+
 
 def compute_forecastdiff(conn_sqlit):
     SQL_forecastdiff = "Select Todays_forecast.EntityName, Todays_forecast.Division, \
@@ -76,7 +83,7 @@ def daterange(conn_sqlit):
     
     dates = pd.DataFrame()
     dates["date"] = rng
-   # dates["date"]= dates["date"].apply(lambda x: x.date())    
+    dates["date"]= dates["date"].apply(lambda x: x.date())    
     
     dates["month"] = pd.DatetimeIndex(dates["date"]).month
     dates["month"] = dates["month"].apply(lambda x: calendar.month_abbr[x])
@@ -122,14 +129,19 @@ if __name__=="__main__":
     
     #Capture today's forecast
     forecast_today = capture_todays_forecast(conn_orc)
-    
     write_data("todaysforecast.xlsx", forecast_today)
     close_connection(conn_orc)
     
     [conn_sqlit,cursor_sqlit] = start_connection(r"H:\forecast_tracking.db", "Yieldprod", oracle = False, sqlit = True)
     
+        
     #Replace Prior day's forecast with Today's forecast
-    update_priorday_fore(conn_sqlit)
+    try:
+        update_priorday_fore(conn_sqlit,forecast_today)
+    except:
+        writetosqlite(forecast_today,"Todays_forecast",conn_sqlit)
+        update_priorday_fore(conn_sqlit,forecast_today)
+        
     
     #Write today's captured forecast to database
     writetosqlite(forecast_today,"Todays_forecast",conn_sqlit)
