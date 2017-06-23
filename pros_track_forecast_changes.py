@@ -14,7 +14,7 @@ import calendar
 
 def start_connection(databasepath, dsn, oracle, sqlit):
     if oracle:
-        conn_orc = pyodbc.connect(DSN = dsn , uid = "fanlinli", pwd = "jun2017avis")
+        conn_orc = pyodbc.connect(DSN = dsn , uid = "", pwd = "")
         cursor_orc = conn_orc.cursor()
         return [conn_orc,cursor_orc]
     
