@@ -15,7 +15,7 @@ import datetime
 
 def start_connection(databasepath, dsn, oracle, sqlit):
     if oracle:
-        conn_orc = pyodbc.connect(DSN = dsn , uid = "fanlinli", pwd = "jun2017avis")
+        conn_orc = pyodbc.connect(DSN = dsn , uid = "", pwd = "")
         cursor_orc = conn_orc.cursor()
         return [conn_orc,cursor_orc]
     
@@ -28,7 +28,7 @@ def start_connection(databasepath, dsn, oracle, sqlit):
 def update_priorday_fore(conn,forecast_today):
     priorday = pd.read_sql_query("select * from Todays_forecast",conn)
     if(priorday.equals(forecast_today) == False):
-        print 'executing'
+        print 'Executing Update'
         writetosqlite(priorday,"Priordays_forecast",conn)
        
 
