@@ -10,11 +10,12 @@ import sqlite3
 import pandas as pd
 import numpy as np
 import calendar
+import datetime
 
 
 def start_connection(databasepath, dsn, oracle, sqlit):
     if oracle:
-        conn_orc = pyodbc.connect(DSN = dsn , uid = "", pwd = "")
+        conn_orc = pyodbc.connect(DSN = dsn , uid = "fanlinli", pwd = "jun2017avis")
         cursor_orc = conn_orc.cursor()
         return [conn_orc,cursor_orc]
     
@@ -106,6 +107,8 @@ def capture_todays_forecast(conn, conn_sql):
     end = datetime.datetime.strftime(end,"%Y%m%d")
     
     d = d[(d['FCST_DATE'] > start) & (d['FCST_DATE'] < end)]
+    d = d.reset_index()
+    d = d.drop("index",1)
     
     return d
 
