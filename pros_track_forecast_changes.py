@@ -17,7 +17,7 @@ import string
 
 def start_connection(databasepath, dsn, oracle, sqlit):
     if oracle:
-        conn_orc = pyodbc.connect(DSN = dsn , uid = "", pwd = "")
+        conn_orc = pyodbc.connect(DSN = dsn , uid = "fanlinli", pwd = "jun2017avis")
         cursor_orc = conn_orc.cursor()
         return [conn_orc,cursor_orc]
     
@@ -116,6 +116,9 @@ def capture_todays_forecast(conn, conn_sql):
 
 
 def compute_forecastdiff(conn_sqlit):
+    region_dict = {"CENTRAL REGION":"CENT", "NORTHEAST REGION":"NE", "SOUTHEAST REGION":"SE", "WESTERN REGION":"WEST"}
+
+    
     SQL_forecastdiff = "Select Todays_forecast.COUNTRY AS Country, Todays_forecast.REGION AS Region, \
     Todays_forecast.POOL AS Pool,Todays_forecast.MARKET_GROUP AS Mrkt_Grp,\
     Todays_forecast.BRAND AS Brand,Todays_forecast.FCST_DATE AS Co_Date, \
@@ -143,6 +146,7 @@ def compute_forecastdiff(conn_sqlit):
     
     fore_diff_excel = fore_diff.copy()
     for i in range(len(fore_diff_excel)):
+        fore_diff_excel.loc[i,"Region"] = region_dict[fore_diff_excel.loc[i,"Region"]]
         fore_diff_excel.loc[i,"Co_Date"] = datetime.datetime.strptime(fore_diff_excel.loc[i,"Co_Date"],"%Y%m%d")
         fore_diff_excel.loc[i,"Co_Date"] = datetime.datetime.strftime(fore_diff_excel.loc[i,"Co_Date"],"%m/%d/%Y")
     
@@ -231,6 +235,9 @@ def format_excel():
     ws1.Columns.AutoFit()
     ws2 = wb.Worksheets("Detailed")
     ws2.Columns.AutoFit()
+    for worksheet in wb.Sheets:
+        if worksheet.Name == "Final":
+           worksheet.Move(Before=wb.Sheets("Detailed"))
     wb.Save()
     excel.Application.Quit()
     
