@@ -11,13 +11,13 @@ import pandas as pd
 import numpy as np
 import calendar
 import datetime
-import win32com.client
+import win32com.client as win32
 import string
 
 
 def start_connection(databasepath, dsn, oracle, sqlit):
     if oracle:
-        conn_orc = pyodbc.connect(DSN = dsn , uid = "", pwd = "")
+        conn_orc = pyodbc.connect(DSN = dsn , uid = "fanlinli", pwd = "jun2017avis")
         cursor_orc = conn_orc.cursor()
         return [conn_orc,cursor_orc]
     
@@ -125,6 +125,8 @@ def compute_forecastdiff(conn_sqlit):
     Todays_forecast.CURR_STRAT_FCST AS Dmnd_Today, \
     Priordays_forecast.CURR_STRAT_FCST AS Dmnd_Yesterday,\
     SUM(Todays_forecast.CURR_STRAT_FCST - Priordays_forecast.CURR_STRAT_FCST) AS Total_Change,\
+    (Todays_forecast.CURR_STRAT_FCST - Priordays_forecast.CURR_STRAT_FCST)/Priordays_forecast.CURR_STRAT_FCST \
+    AS Perc_Change, \
     Todays_forecast.STRAT_1 AS Dmnd_Today_S1, Priordays_forecast.STRAT_1 AS Dmnd_Yesterday_S1, \
     SUM(Todays_forecast.STRAT_1 - Priordays_forecast.STRAT_1) AS Total_Change_S1, \
     Todays_forecast.STRAT_7 AS Dmnd_Today_S7, Priordays_forecast.STRAT_7 AS Dmnd_Yesterday_S7, \
@@ -142,6 +144,9 @@ def compute_forecastdiff(conn_sqlit):
     
     fore_diff = pd.read_sql_query(SQL_forecastdiff,conn_sqlit)
     
+    for i in range(len(fore_diff)):
+        fore_diff.loc[i,"Perc_Change"] = fore_diff.loc[i,"Perc_Change"].round(decimals = 4)
+   
     writetosqlite(fore_diff,"Summary_forecastdiff",conn_sqlit)
     
     fore_diff_excel = fore_diff.copy()
@@ -156,6 +161,8 @@ def compute_forecastdiff(conn_sqlit):
     num2alpha = dict(zip(range(1, 27), string.ascii_uppercase))
     workbook  = writer.book
     worksheet = writer.sheets["Detailed"]
+    format2 = workbook.add_format({'num_format': '0.00%'})
+    worksheet.set_column('J:J', None, format2)
     worksheet.autofilter('A1:{0}{1}'.format(num2alpha[len(fore_diff.columns)],len(fore_diff)))
 
 
@@ -197,7 +204,7 @@ def summarize_forecastdiff(conn_sqlit):
     sum_forecastdiff = pd.read_sql_query(SQL_finalforecastchange,conn_sqlit)
     
     for i in range(len(sum_forecastdiff)):
-        sum_forecastdiff.loc[i,"Perc_Change"] = sum_forecastdiff.loc[i,"Perc_Change"].round(decimals = 2)
+        sum_forecastdiff.loc[i,"Perc_Change"] = sum_forecastdiff.loc[i,"Perc_Change"].round(decimals = 4)
    
    
     for i in range(len(sum_forecastdiff)):
@@ -210,7 +217,7 @@ def summarize_forecastdiff(conn_sqlit):
     num2alpha = dict(zip(range(1, 27), string.ascii_uppercase))
     workbook  = writer.book
     worksheet = writer.sheets["Final"]
-    format2 = workbook.add_format({'num_format': '0%'})
+    format2 = workbook.add_format({'num_format': '0.00%'})
     worksheet.set_column('J:J', None, format2)
     worksheet.autofilter('A1:{0}{1}'.format(num2alpha[len(sum_forecastdiff.columns)],len(sum_forecastdiff)))
 
