@@ -9,7 +9,7 @@ import pyodbc
 import sqlite3
 import pandas as pd
 
-c_orc = pyodbc.connect(DSN = "AvisDW",usd = "pricing", pwd = "pricing")
+c_orc = pyodbc.connect(DSN = "",usd = "", pwd = "")
 
 sql = "select LOC.POOL AS Pool, LOC.MARKET_GROUP AS Mrkt_Grp, LOC.BRAND AS Brand, \
 RES.CO_DATE AS Co_Date, RES.CO_TIME AS Co_Time, RES.RES_COUNT AS Res_Count, \
