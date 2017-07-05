@@ -7,7 +7,8 @@ Created on Wed Jun 07 09:28:26 2017
 
 import pandas as pd
 import numpy as np
-
+import win32com.client as win32
+import re
 
 def read_data():
     data_file = ['comp_codate_vs_dp_data','comp_dow_vs_dp_data','test']
@@ -33,18 +34,15 @@ def start_summary(df):
         days_prior.append(i)
     days_prior = np.unique(days_prior) 
     
-    d_detailed = pd.DataFrame(df2)
+    d_detailed = df2.copy()
     out_detailed = d_detailed.groupby(['MRKT_GRP','BRAND','RUN_DP']).sum()
     del out_detailed['PROS_PERC_ERR']
         
-    d_final = pd.DataFrame(df2)
+    d_final = df2.copy()
     del d_final['RUN_DP']
     out_final = d_final.groupby(['MRKT_GRP','BRAND']).sum()    
     del out_final['PROS_PERC_ERR']  
    
-    
-    
-    
     return [out_detailed,out_final,mrkt_grp,brand,days_prior]
     
     
@@ -64,12 +62,14 @@ def generate_summary(df,out_detailed,out_final,in_column_header,out_column_heade
     for i in range(len(pros_perc_error)):
         if(abs(pros_perc_error[i]-0.0)<0.00000001):
             comment.append('NAN')
-        elif(pros_perc_error[i]>-0.05):
+        elif(pros_perc_error[i]>-0.1 and pros_perc_error[i]<0.1):
             comment.append('Good')
-        else: 
-            comment.append('Bad')
+        elif(pros_perc_error[i]>0.1): 
+            comment.append('Overforecast')
+        else:
+            comment.append('Underforecast')
     
-    #out_data[out_column_header] = comment
+    
     out_detailed[out_column_header] = comment
     
     flag = []
@@ -79,13 +79,8 @@ def generate_summary(df,out_detailed,out_final,in_column_header,out_column_heade
         else:
             flag.append(0)
     
-    #out_data['Flag_%s'%out_column_header] = flag    
-    out_detailed['Flag_%s'%out_column_header] = flag    
-    
-    #Write the detailed output dataframe to file        
-    #write_data('summary_detailed.xlsx',out_data)
-    write_data('summary_detailed.xlsx',out_detailed)
      
+    out_detailed['Flag_%s'%out_column_header] = flag    
     
     final_flag = {}
     final_flag = dict.fromkeys(mrkt_grp)
@@ -160,6 +155,7 @@ def generate_dow_summary(df_dow,in_col_head,out_final, mrkt_grp,brand):
         for b in brand:
             out_dow_flag.append(dow_flag[m][b])
     
+  
     out_final['Underforecast_%s'%in_col_head] = out_dow_flag
                     
 def generate_week_summary(df,in_col,out_col):
@@ -169,12 +165,74 @@ def generate_week_summary(df,in_col,out_col):
     generate_summary(df3,out_detailed,out_final,in_col,out_col,mrkt_grp,brand,days_prior)
 
      
-def write_data(filename,content):
-    writer = pd.ExcelWriter(filename, engine = 'xlsxwriter')
-    content.to_excel(writer, sheet_name = 'Sheet1')
+def write_data(writer,sheetname,content):
+    
+    content.to_excel(writer, sheet_name = sheetname)
+    
+def format_output(d_final,d_detailed):
+    
+    d_final["Underforecast_PROS_PERC_ERR_DATA"]= d_final["Underforecast_PROS_PERC_ERR_DATA"].apply(lambda x: re.sub(r"[\['\]]",'',str(x)))
+    d_final["Underforecast_ERR_DIFF_PROS_YLD"]= d_final["Underforecast_ERR_DIFF_PROS_YLD"].apply(lambda x: re.sub(r"[\['\]]",'',str(x)))
+    
+     
+    write_data(writer,'Final',d_final)
+    write_data(writer,'Detailed',d_detailed)  
     writer.save()
+    
+    excel = win32.gencache.EnsureDispatch('Excel.Application')
+    wb = excel.Workbooks.Open(r'H:\Weekly_Summary.xlsx')
+    ws1 = wb.Worksheets("Final")
+    ws1.Columns.AutoFit()
+    
+    d = pd.read_excel(r"H:\Weekly_Summary.xlsx")
+    
+    a = d.columns.get_loc("vs Actual (Overall)")
+    a+=1
+    for i in range(len(d)):
+        if d.loc[i,"vs Actual (Overall)"]=='Bad':
+            ws1.Cells(i+2,a).Interior.ColorIndex = 3
+        else:
+            ws1.Cells(i+2,a).Interior.ColorIndex = 4
+            
+    a = d.columns.get_loc("vs Actual (Past Week)")
+    a+=1
+    for i in range(len(d)):
+        if d.loc[i,"vs Actual (Past Week)"]=='Bad':
+            ws1.Cells(i+2,a).Interior.ColorIndex = 3
+        else:
+            ws1.Cells(i+2,a).Interior.ColorIndex = 4
+            
+    a = d.columns.get_loc("vs Yield (Overall)")
+    a+=1
+    for i in range(len(d)):
+        if d.loc[i,"vs Yield (Overall)"]=='Bad':
+            ws1.Cells(i+2,a).Interior.ColorIndex = 3
+        else:
+            ws1.Cells(i+2,a).Interior.ColorIndex = 4
+            
+    a = d.columns.get_loc("vs Yield (Past Week)")
+    a+=1
+    for i in range(len(d)):
+        if d.loc[i,"vs Yield (Past Week)"]=='Bad':
+            ws1.Cells(i+2,a).Interior.ColorIndex = 3
+        else:
+            ws1.Cells(i+2,a).Interior.ColorIndex = 4
+            
+    for i in range(1,9):
+        for j in range(len(d)):
+            ws1.Cells(j+2,i).BorderAround()
+            
+    ws1.Columns.BorderAround()        
+    ws2 = wb.Worksheets("Detailed")
+    ws2.Columns.AutoFit()
+
+    wb.Save()
+    excel.Application.Quit()
+
 
 if __name__=='__main__':
+    writer = pd.ExcelWriter('Weekly_Summary.xlsx', engine = 'xlsxwriter')
+    
     [df,df_dow]=read_data()
     [out_detailed,out_final,mrkt_grp,brand,days_prior] = start_summary(df)
     
@@ -185,5 +243,9 @@ if __name__=='__main__':
     generate_summary(df,out_detailed,out_final,'ERR_DIFF_PROS_YLD','vs Yield (Overall)',mrkt_grp,brand,days_prior)
     generate_dow_summary(df_dow,'ERR_DIFF_PROS_YLD', out_final, mrkt_grp,brand)
     generate_week_summary(df,'ERR_DIFF_PROS_YLD','vs Yield (Past Week)')
-    #Write the output dataframe to file         
-    write_data('summary_final.xlsx',out_final)  
+    
+    #Write the output dataframe to file          
+    format_output(out_final,out_detailed)
+      
+    
+    
