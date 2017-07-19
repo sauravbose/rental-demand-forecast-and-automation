@@ -10,7 +10,7 @@ import sqlite3
 import pandas as pd
 import datetime
 
-conn_orc = pyodbc.connect(DSN="",uid = "", pwd = "")
+conn_orc = pyodbc.connect(DSN="ProsProd",uid = "bosesaur", pwd = "wel2tiger")
 
 sql_cy_hold = "select LOC.MARKET_GROUP, LOC.BRAND_TYPE, RES.CO_DATE, RES.TRXN_DATE, \
 BUS.DFP_SUPER_SEGMENT, RES.PRODUCT_CATEGORY, SUM(RES.ACTIVE_RES_FLAG) AS Active_Res,\
@@ -22,6 +22,13 @@ GROUP BY LOC.MARKET_GROUP, LOC.BRAND_TYPE, RES.CO_DATE, RES.TRXN_DATE, BUS.DFP_S
 RES.PRODUCT_CATEGORY"  
 
 data = pd.read_sql(sql_cy_hold,conn_orc)
+
+sql_walkup = "select LOC.MARKET_GROUP, LOC.BRAND_TYPE, REN.CO_DATE, \
+SUM(REN.WALKUP_FLAG) AS WALKUP FROM PPSS.PA_CHECKOUT_LOCATION LOC INNER JOIN PPSS.PA_RENTAL REN \
+ON REN.DW_STATION = LOC.DW_STATION WHERE LOC.MARKET_GROUP = 'PIT_T1' GROUP BY LOC.MARKET_GROUP, \
+LOC.BRAND_TYPE, REN.CO_DATE"
+
+data_walk = pd.read_sql(sql_walkup,conn_orc)
 
 conn_orc.close()
 
@@ -39,8 +46,12 @@ end_cy = datetime.datetime.strptime("20170630","%Y%m%d")
 data_cy = data[(data["CO_DATE"] >= start_cy) & (data["CO_DATE"]<=end_cy)]
 data_cy = data_cy.reset_index()
 data_cy = data_cy.drop("index",1)
-
 data_cy["CO_DATE"] = data_cy["CO_DATE"].apply(lambda x: x.date())
+
+data_walk = data_walk[(data_walk["CO_DATE"] >= start_cy) & (data_walk["CO_DATE"]<=end_cy)]
+data_walk = data_walk.reset_index()
+data_walk = data_walk.drop("index",1)
+data_walk["CO_DATE"] = data_walk["CO_DATE"].apply(lambda x: x.date())
 
 
 conn_sq = sqlite3.connect("Pittsburgh.db")
@@ -96,7 +107,6 @@ data_py = data_py.drop("index",1)
 
 data_py["CO_DATE"] = data_py["CO_DATE"].apply(lambda x: x.date())
 
-conn_sq = sqlite3.connect("Pittsburgh.db")
 
 data_py.to_sql("Prior_Yr_Holdings",conn_sq,if_exists='replace')
 
@@ -133,14 +143,38 @@ newdata_py["CO_DATE"] = newdata_py["CO_DATE"].apply(lambda x: x.date())
 newdata_py["CO_DATE"] = newdata_py["CO_DATE"] + datetime.timedelta(364)
 newdata_py.to_sql("Prior_yr_Res_Holdings",conn_sq, if_exists = 'replace')
 
+sql_py = "select CO_DATE, BRAND_TYPE, MARKET_GROUP, SUM(RES_COUNT) AS PY_RES FROM Prior_Yr_Holdings GROUP BY CO_DATE, BRAND_TYPE, MARKET_GROUP"
 
-sql_join1 = "select CY.CO_DATE, CY.BRAND_TYPE, CY.MARKET_GROUP, CY.Days_Prior, PY.RES_COUNT AS PY_RES_HOLD, CY.RES_COUNT AS CY_RES_HOLD FROM  Prior_yr_Res_Holdings PY, Curr_yr_Res_Holdings CY WHERE  CY.CO_DATE=PY.CO_DATE AND CY.BRAND_TYPE = PY.BRAND_TYPE AND CY.MARKET_GROUP=PY.MARKET_GROUP AND CY.Days_Prior=PY.Days_Prior"
+p = pd.read_sql(sql_py,conn_sq)
+p["CO_DATE"] = p["CO_DATE"].apply(lambda x: datetime.datetime.strptime(x,"%Y-%m-%d"))
+p["CO_DATE"] = p["CO_DATE"].apply(lambda x: x.date())
+p["CO_DATE"] = p["CO_DATE"] + datetime.timedelta(364)
 
+p.to_sql("Prior_Res_Total",conn_sq, if_exists='replace')
+
+sql_cy = "select CO_DATE, BRAND_TYPE, MARKET_GROUP, SUM(RES_COUNT) AS CY_RES FROM Current_Yr_Holdings GROUP BY CO_DATE, BRAND_TYPE, MARKET_GROUP"
+
+c = pd.read_sql(sql_cy,conn_sq)
+c.to_sql("Current_Res_Total",conn_sq, if_exists='replace')
+
+
+
+sql_join1 = "select CY.CO_DATE, CY.BRAND_TYPE, CY.MARKET_GROUP, CY.Days_Prior, PY.RES_COUNT AS PY_RES_HOLD, CY.RES_COUNT AS CY_RES_HOLD, PR.PY_RES, CR.CY_RES, WK.WALKUP FROM Prior_yr_Res_Holdings PY, Curr_yr_Res_Holdings CY, Prior_Res_Total PR , Current_Res_Total CR, Walkups WK WHERE  CY.CO_DATE=PY.CO_DATE AND CY.CO_DATE=PR.CO_DATE AND   CY.CO_DATE=CR.CO_DATE AND CY.CO_DATE=WK.CO_DATE AND CY.BRAND_TYPE = PY.BRAND_TYPE AND CY.BRAND_TYPE = PR.BRAND_TYPE AND CY.BRAND_TYPE = CR.BRAND_TYPE AND CY.BRAND_TYPE = WK.BRAND_TYPE AND CY.MARKET_GROUP=PY.MARKET_GROUP AND CY.MARKET_GROUP=PR.MARKET_GROUP AND CY.MARKET_GROUP=CR.MARKET_GROUP AND CY.MARKET_GROUP=WK.MARKET_GROUP AND CY.Days_Prior=PY.Days_Prior"
 joined_data = pd.read_sql(sql_join1,conn_sq)
 joined_data[r"YOY_Res_Growth_%"] = (joined_data["CY_RES_HOLD"]/joined_data["PY_RES_HOLD"]) - 1 
+
+joined_data["Adj_PY_Acutals(PROS_Fcst_Auto_Infl)"] = (1+joined_data["YOY_Res_Growth_%"])*joined_data["PY_RES"] + joined_data["WALKUP"]
+
+joined_data["CY_Actual"] = joined_data["CY_RES"]+joined_data["WALKUP"]
+
+joined_data[r"%_Error_of_Adj_PY_Acutals"] = (joined_data["CY_Actual"]/joined_data["Adj_PY_Acutals(PROS_Fcst_Auto_Infl)"]) - 1
+
+
+joined_data.to_sql("Joined_Data",conn_sq,if_exists='replace')
 
 writer = pd.ExcelWriter(r"H:\newpitts.xlsx")
 joined_data.to_excel(writer,index=False)
 writer.save()
+
 
 conn_sq.close()
