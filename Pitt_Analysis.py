@@ -13,7 +13,7 @@ import numpy as np
 
 
 def capture_data(conn_sq):
-    conn_orc = pyodbc.connect(DSN="ProsProd",uid = "bosesaur", pwd = "wel2tiger")
+    conn_orc = pyodbc.connect(DSN="",uid = "", pwd = "")
     
     sql_cy_hold = "select LOC.MARKET_GROUP, LOC.BRAND_TYPE, RES.CO_DATE, RES.TRXN_DATE, \
     BUS.DFP_SUPER_SEGMENT, RES.PRODUCT_CATEGORY, SUM(RES.ACTIVE_RES_FLAG) AS Active_Res,\
