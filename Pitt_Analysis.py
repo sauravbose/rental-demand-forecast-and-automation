@@ -10,10 +10,11 @@ import sqlite3
 import pandas as pd
 import datetime
 import numpy as np
+import re
 
 
 def capture_data(conn_sq):
-    conn_orc = pyodbc.connect(DSN="",uid = "", pwd = "")
+    conn_orc = pyodbc.connect(DSN="ProsProd",uid = "bosesaur", pwd = "wel2tiger")
     
     sql_cy_hold = "select LOC.MARKET_GROUP, LOC.BRAND_TYPE, RES.CO_DATE, RES.TRXN_DATE, \
     BUS.DFP_SUPER_SEGMENT, RES.PRODUCT_CATEGORY, SUM(RES.ACTIVE_RES_FLAG) AS Active_Res,\
@@ -28,8 +29,9 @@ def capture_data(conn_sq):
 
     sql_walkup = "select LOC.MARKET_GROUP, LOC.BRAND_TYPE, REN.CO_DATE, \
     SUM(REN.WALKUP_FLAG) AS WALKUP FROM PPSS.PA_CHECKOUT_LOCATION LOC INNER JOIN PPSS.PA_RENTAL REN \
-    ON REN.DW_STATION = LOC.DW_STATION WHERE LOC.MARKET_GROUP = 'PIT_T1' GROUP BY LOC.MARKET_GROUP, \
-    LOC.BRAND_TYPE, REN.CO_DATE"
+    ON REN.DW_STATION = LOC.DW_STATION INNER JOIN PPSS.PA_BUSINESS_SEGMENT BUS ON \
+    BUS.DFP_PRICING_SEGMENT = REN.DFP_PRICING_SEGMENT WHERE LOC.MARKET_GROUP = 'PIT_T1' \
+    AND BUS.DFP_SUPER_SEGMENT != 'ONE-WAY' GROUP BY LOC.MARKET_GROUP, LOC.BRAND_TYPE, REN.CO_DATE"
 
     data_walk_all = pd.read_sql(sql_walkup,conn_orc)
 
@@ -217,7 +219,7 @@ def yoy_calc():
     joined_data[r"YOY_Res_Growth_Perc"] = (joined_data["CY_RES_HOLD"]/joined_data["PY_RES_HOLD"]) - 1 
     joined_data["Adj_PY_Acutals(PROS_Fcst_Auto_Infl)"] = (1+joined_data["YOY_Res_Growth_Perc"])*joined_data["PY_RES"] + joined_data["WALKUP"]
     joined_data["CY_Actual"] = joined_data["CY_RES"]+joined_data["WALKUP"]
-    joined_data[r"Perc_Error_of_Adj_PY_Acutals"] = (joined_data["CY_Actual"]/joined_data["Adj_PY_Acutals(PROS_Fcst_Auto_Infl)"]) - 1
+    joined_data[r"Perc_Error_of_Adj_PY_Acutals"] = (joined_data["CY_Actual"]-joined_data["Adj_PY_Acutals(PROS_Fcst_Auto_Infl)"]) /joined_data["CY_Actual"]
         
     joined_data.to_sql("Joined_Data",conn_sq,if_exists='replace')
     
@@ -227,20 +229,20 @@ def yoy_calc():
     joined2 = pd.read_sql(sql_join2,conn_sq)
     
     del joined2["index"]
-    joined2[r"Perc_Error_of_FQT_Forecast"] = (joined2["CY_Actual"]/joined2["FQT_Forecast"]) - 1
+    joined2[r"Perc_Error_of_FQT_Forecast"] = (joined2["CY_Actual"]-joined2["FQT_Forecast"])/joined2["CY_Actual"]
     
     joined2.to_sql("Final_Forecast_Detailed",conn_sq,if_exists='replace')
     
     sql_yoy= "select CO_DATE AS Co_Date, BRAND_TYPE AS Brand, MARKET_GROUP AS Mrkt_Grp, \
-    Days_Prior, YOY_Res_Growth_Perc, PY_RES_HOLD AS PY_Res_Hold, CY_RES_HOLD AS CY_Res_Hold, \
-    [Adj_PY_Acutals(PROS_Fcst_Auto_Infl)], FQT_Forecast,  CY_Actual, Perc_Error_of_Adj_PY_Acutals, \
+    Days_Prior, YOY_Res_Growth_Perc, PY_RES_HOLD AS PY_Res_Hold, PY_RES AS PY_Res_Total, CY_RES_HOLD AS CY_Res_Hold, \
+    WALKUP AS Walkups, [Adj_PY_Acutals(PROS_Fcst_Auto_Infl)], FQT_Forecast,  CY_Actual, Perc_Error_of_Adj_PY_Acutals, \
     Perc_Error_of_FQT_Forecast FROM Final_Forecast_Detailed ORDER BY Co_Date"
     
     yoy = pd.read_sql(sql_yoy,conn_sq)
     
-    writer = pd.ExcelWriter(r"H:\Pitt_Final.xlsx")
-    yoy.to_excel(writer,index=False)
-    writer.save()
+    yoy.to_sql("YOY_Data",conn_sq,if_exists='replace')
+    return yoy
+   
 
 def timeseries_detailed(data,dates_cy,brand,dp):
     data_timeseries = data.copy()
@@ -262,9 +264,9 @@ def timeseries_detailed(data,dates_cy,brand,dp):
                 timeseries[i][j][k] = []
                 
                 
-    for i in [dates_cy[0]]:
-        for j in [brand[0]]:
-            for k in [dp[0]]:
+    for i in dates_cy:
+        for j in brand:
+            for k in dp:
                 dates = datetime.datetime.strptime(i,"%Y-%m-%d")
                 end_final = dates 
                 start_co = dates - datetime.timedelta(364)
@@ -280,12 +282,117 @@ def timeseries_detailed(data,dates_cy,brand,dp):
                     count2 = d2["RES_COUNT"].sum()
                     growth = (count2/count1) - 1
                     timeseries[i][j][k].append(growth)
-                    start_co += datetime.timedelta(1)
-                    end_co += datetime.timedelta(1)
-                    start_trxn += datetime.timedelta(1)
-                    end_trxn += datetime.timedelta(1)
+                    start_co += datetime.timedelta(28)
+                    end_co += datetime.timedelta(28)
+                    start_trxn += datetime.timedelta(28)
+                    end_trxn += datetime.timedelta(28)
+    for i in dates_cy:
+       for j in brand:
+           for k in dp:
+                timeseries[i][j][k] = np.array(timeseries[i][j][k]).mean()
     
-    return timeseries
+    timeseries_database = pd.DataFrame(columns = ["Co_Date","Brand","Days_Prior","Timeseries_Growth_Perc"])
+    index = 0
+    for i in timeseries:
+        for j in timeseries[i]:
+            for k in timeseries[i][j]:
+                timeseries_database.loc[index,"Co_Date"]=i
+                timeseries_database.loc[index,"Brand"] = j
+                timeseries_database.loc[index,"Days_Prior"] = k
+                timeseries_database.loc[index,"Timeseries_Growth_Perc"] = timeseries[i][j][k]
+                index+=1
+    
+    timeseries_database.to_sql("Timeseries",conn_sq,if_exists='replace')
+    
+    sql = "select Trend_Adj.*, Timeseries.Timeseries_Growth_Perc from Trend_Adj, Timeseries WHERE Timeseries.Co_Date = Trend_Adj.Co_Date AND Timeseries.Brand = Trend_Adj.Brand AND Timeseries.Days_Prior = Trend_Adj.Days_Prior"
+    timeseries_data = pd.read_sql(sql,conn_sq)
+    timeseries_data["Timeseries_Forecast"] = (1+timeseries_data["Timeseries_Growth_Perc"])*timeseries_data["PY_Res_Total"] + timeseries_data["Walkups"]
+   
+    del timeseries_data["index"]
+    timeseries_data[r"Perc_Error_of_Timeseries_Forecast"] = (timeseries_data["CY_Actual"]-timeseries_data["Timeseries_Forecast"])/timeseries_data["CY_Actual"]
+
+    timeseries_data.to_sql("Timeseries",conn_sq,if_exists='replace')
+            
+    return timeseries_data
+
+def trend_adj(data,dates_cy,brand,dp):
+    data_trend_adj = data.copy()
+    data_trend_adj["TRXN_DATE"] = data_trend_adj["TRXN_DATE"].apply(lambda x: datetime.datetime.combine(x,datetime.time()))
+    data_trend_adj["CO_DATE"] = data_trend_adj["CO_DATE"].apply(lambda x: datetime.datetime.combine(x,datetime.time()))
+    
+    trend = {}
+    trend = dict.fromkeys(dates_cy)
+    for i in trend:
+        trend[i] = dict.fromkeys(brand)
+        
+    for i in trend:
+        for j in trend[i]:
+            trend[i][j] = dict.fromkeys(dp)
+            
+    for i in trend:
+        for j in trend[i]:
+            for k in trend[i][j]:
+                trend[i][j][k] = []
+                
+                
+    for i in dates_cy:
+        for j in brand:
+            for k in dp:
+                cy_date = datetime.datetime.strptime(i,"%Y-%m-%d")
+                py_date = cy_date - datetime.timedelta(364)
+                cy_strt_trxn = cy_date - datetime.timedelta(56)
+                py_strt_trxn = py_date - datetime.timedelta(56)
+                d1 = data_trend_adj[(data_trend_adj["CO_DATE"]==cy_date) & (data_trend_adj["BRAND_TYPE"]==j) & (data_trend_adj["TRXN_DATE"]>=cy_strt_trxn) & (data_trend_adj["TRXN_DATE"]<=cy_date)]
+                d1 = d1.reset_index()
+                count1 = d1["RES_COUNT"].sum()
+                d2 = data_trend_adj[(data_trend_adj["CO_DATE"]==py_date) & (data_trend_adj["BRAND_TYPE"]==j) & (data_trend_adj["TRXN_DATE"]>=py_strt_trxn) & (data_trend_adj["TRXN_DATE"]<=py_date)]
+                d2 = d2.reset_index()
+                count2 = d2["RES_COUNT"].sum()
+                growth = (count1/count2) - 1
+                trend[i][j][k].append(growth)
+                
+    trend_database = pd.DataFrame(columns = ["Co_Date","Brand","Days_Prior","Trend_Adj_Growth_Perc"])
+    index = 0
+    for i in trend:
+        for j in trend[i]:
+            for k in trend[i][j]:
+                trend_database.loc[index,"Co_Date"]=i
+                trend_database.loc[index,"Brand"] = j
+                trend_database.loc[index,"Days_Prior"] = k
+                trend_database.loc[index,"Trend_Adj_Growth_Perc"] = trend[i][j][k]
+                index+=1
+    
+    trend_database["Trend_Adj_Growth_Perc"] =  trend_database["Trend_Adj_Growth_Perc"].apply(lambda x: re.sub(r"[\[\]]","",str(x)))   
+    trend_database["Trend_Adj_Growth_Perc"] = trend_database["Trend_Adj_Growth_Perc"].apply(lambda x: float(x))
+
+    trend_database.to_sql("Trend_Adj",conn_sq,if_exists='replace')
+    
+    sql = "select YOY.*, TREND.Trend_Adj_Growth_Perc from YOY_Data YOY, Trend_Adj TREND WHERE TREND.Co_Date = YOY.Co_Date AND TREND.Brand = YOY.Brand AND TREND.Days_Prior = YOY.Days_Prior"
+    trend_data = pd.read_sql(sql,conn_sq)
+    trend_data["Trend_Adj_Forecast"] = (1+trend_data["Trend_Adj_Growth_Perc"])*trend_data["PY_Res_Total"] + trend_data["Walkups"]
+   
+    del trend_data["index"]
+    trend_data[r"Perc_Error_of_Trend_Adj_Forecast"] = (trend_data["CY_Actual"]-trend_data["Trend_Adj_Forecast"])/trend_data["CY_Actual"]
+
+    trend_data.to_sql("Trend_Adj",conn_sq,if_exists='replace')
+
+    return trend_data                
+    
+
+def write_data():
+    sql = "select Co_Date, Brand, Mrkt_Grp, Days_Prior, PY_Res_Hold, CY_Res_Hold , \
+    CY_Actual, YOY_Res_Growth_Perc, [Adj_PY_Acutals(PROS_Fcst_Auto_Infl)], \
+    Perc_Error_of_Adj_PY_Acutals, FQT_Forecast, Perc_Error_of_FQT_Forecast,  \
+    Trend_Adj_Growth_Perc, Trend_Adj_Forecast, Perc_Error_of_Trend_Adj_Forecast, \
+    Timeseries_Growth_Perc, Timeseries_Forecast, Perc_Error_of_Timeseries_Forecast \
+    FROM Timeseries"
+    
+    data_to_write = pd.read_sql(sql,conn_sq)
+    
+    writer = pd.ExcelWriter(r"H:\Pitt_Final_Data3.xlsx")
+    data_to_write.to_excel(writer,index=False)
+    writer.save()
+     
 
 if __name__ == "__main__":
     conn_sq = sqlite3.connect("Pittsburgh.db")
@@ -297,7 +404,18 @@ if __name__ == "__main__":
     pros_forecast()
     yoy = yoy_calc()
     
-    timeseries = timeseries_detailed(data,dates_cy,brand,dp)
+    
+    
+    trend_data = trend_adj(data,dates_cy,brand,dp)
+    timeseries_data = timeseries_detailed(data,dates_cy,brand,dp)
+    
+    write_data()
+    
     
     
     conn_sq.close()
+    
+    
+
+    
+    
